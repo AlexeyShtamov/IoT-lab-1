@@ -13,7 +13,9 @@ public class IoTDeviceSimulator extends JFrame {
     private JLabel moistureLabel;
     private JButton pumpButton;
     private JLabel pumpStatusLabel;
+    private JCheckBox autoModeCheckBox;
     private boolean pumpOn = false;
+    private boolean autoMode = true; // По умолчанию автоматический режим
     private Timer timer;
     private int moistureLevel = 50;
 
@@ -21,13 +23,12 @@ public class IoTDeviceSimulator extends JFrame {
     private final String SENSOR_TOPIC = "sensor/soilMoisture";
     private final String ACTUATOR_TOPIC = "actuator/pump";
     private MqttClient client;
-    private boolean manualMode = false;
 
     public IoTDeviceSimulator() {
         setTitle("IoT Device Simulator");
         setSize(400, 300);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLayout(new GridLayout(4, 1));
+        setLayout(new GridLayout(5, 1));
 
         moistureLabel = new JLabel("Soil Moisture: " + moistureLevel);
         add(moistureLabel);
@@ -40,14 +41,30 @@ public class IoTDeviceSimulator extends JFrame {
         add(pumpStatusLabel);
 
         pumpButton = new JButton("Toggle Pump");
+        pumpButton.setEnabled(false); // Кнопка включена только в ручном режиме
         pumpButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                pumpOn = !pumpOn;
-                pumpStatusLabel.setText(pumpOn ? "Pump is ON" : "Pump is OFF");
+                if (!autoMode) { // Логика ручного режима
+                    pumpOn = !pumpOn;
+                    pumpStatusLabel.setText(pumpOn ? "Pump is ON (Manual)" : "Pump is OFF (Manual)");
+                }
             }
         });
         add(pumpButton);
+
+        autoModeCheckBox = new JCheckBox("Automatic Mode", autoMode);
+        autoModeCheckBox.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                autoMode = autoModeCheckBox.isSelected();
+                pumpButton.setEnabled(!autoMode); // Включаем кнопку только в ручном режиме
+                pumpStatusLabel.setText(pumpOn ?
+                        (autoMode ? "Pump is ON (Auto)" : "Pump is ON (Manual)") :
+                        (autoMode ? "Pump is OFF (Auto)" : "Pump is OFF (Manual)"));
+            }
+        });
+        add(autoModeCheckBox);
 
         // Таймер для обновления показаний каждые 10 секунд
         timer = new Timer();
@@ -55,6 +72,7 @@ public class IoTDeviceSimulator extends JFrame {
             @Override
             public void run() {
                 updateMoistureLevel();
+                publishSensorData();
             }
         }, 0, 10000);
 
@@ -77,15 +95,6 @@ public class IoTDeviceSimulator extends JFrame {
         } catch (MqttException e) {
             e.printStackTrace();
         }
-
-        // Обновление таймера для отправки данных каждые 10 секунд
-        timer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                updateMoistureLevel();
-                publishSensorData();
-            }
-        }, 0, 10000);
     }
 
     private void publishSensorData() {
@@ -106,10 +115,15 @@ public class IoTDeviceSimulator extends JFrame {
         soilMoistureSlider.setValue(moistureLevel);
         moistureLabel.setText("Soil Moisture: " + moistureLevel);
 
-        // Автоматический запуск насоса при низком уровне влажности
-        if (moistureLevel < 20 && !pumpOn) {
-            pumpOn = true;
-            pumpStatusLabel.setText("Pump is ON (Auto)");
+        // Логика автоматического режима
+        if (autoMode) {
+            if (moistureLevel < 20 && !pumpOn) {
+                pumpOn = true;
+                pumpStatusLabel.setText("Pump is ON (Auto)");
+            } else if (moistureLevel > 50 && pumpOn) {
+                pumpOn = false;
+                pumpStatusLabel.setText("Pump is OFF (Auto)");
+            }
         }
     }
 
@@ -122,4 +136,3 @@ public class IoTDeviceSimulator extends JFrame {
         });
     }
 }
-
